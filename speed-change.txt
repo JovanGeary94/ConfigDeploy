@@ -1,4 +1,0 @@
-en
-conf t
-line con 0
-speed 115200
