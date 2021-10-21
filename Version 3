@@ -1,0 +1,128 @@
+import serial
+import os
+import time
+import serial.tools.list_ports
+import winsound
+import getpass
+
+rootFolder = os.path.abspath('C:/users/' + getpass.getuser() + '/desktop/DEVICE_CONFIGS')
+
+fileList = []
+
+for files in os.listdir(rootFolder):
+
+    fileList.append(os.path.join(rootFolder, files))
+    
+
+freq = 1500
+dur = 1000
+
+COM_PORTS = list(serial.tools.list_ports.comports()) # COM ports in device manager
+
+USB_IDEN = False
+
+for ports in COM_PORTS:
+        
+    str_ports = str(ports)
+        
+    if 'USB Serial Port' in str_ports:
+        
+        USB_IDEN = True
+        userCOM = str_ports.partition(' ')
+        userCOM = userCOM[0]
+        break
+        
+if USB_IDEN == False:
+    
+    print('\nNo USB Serial port identified, plug in a USB Serial adapter and restart the application\n')
+    time.sleep(5)
+    exit(0)
+
+else:
+    
+    print('\nUSB Serial port has been automatically identified as: ' + userCOM + '\n')
+
+starterCommands = ['\r\n', '\r\n', 'n\n', 'en\n', 'conf t\n', 'line con 0\n', 'speed 115200\n'] #Initial commands to send to switch, change speed to 115200
+
+cmdexit = 'exit\n'
+console_reset = 'speed 9600\n'
+wr_mem = 'do wr mem\n'
+
+for configFiles in fileList:
+    
+    print('Device is booting, configuration will be deployed shortly. Please wait...\n')
+    time.sleep(5)
+    
+    # Open serial port using Cisco defaults
+    ser = serial.Serial(
+    port=userCOM,\
+    baudrate=9600,\
+    parity=serial.PARITY_NONE,\
+    stopbits=serial.STOPBITS_ONE,\
+    bytesize=serial.EIGHTBITS,\
+    timeout=0)
+    
+    while True:
+    
+        termLine = ser.read(800).decode('utf-8')
+        time.sleep(0.01)
+        
+        if 'RJ45' in termLine:
+        
+            print('Configuration is being applied, please wait...\n')
+            break
+        
+    # Change switch console speed to 115200
+    for commands in starterCommands:
+    
+        ser.write(commands.encode('utf-8'))
+        time.sleep(0.3)
+    
+    time.sleep(0.1)
+    
+    # set connection speed of PySerial to 115200
+    ser.baudrate = 115200
+    
+    # Return to global config
+    ser.write(cmdexit.encode('utf-8'))
+    time.sleep(0.07)
+
+    # Open the file and write the contents to the serial port (switch)
+    with open(configFiles, 'r') as inFile:
+        
+        inputCommands = inFile.readlines()
+        
+        for line in inputCommands:
+        
+            ser.write(line.encode('utf-8'))
+            time.sleep(0.07)
+    # Return to global config and reset the console speed to 9600 
+    ser.write(starterCommands[4].encode('utf-8'))
+    time.sleep(0.07)
+    ser.write(starterCommands[5].encode('utf-8'))
+    time.sleep(0.07)
+    ser.write(console_reset.encode('utf-8'))
+    time.sleep(0.07)
+    
+    time.sleep(10)
+    
+    ser.baudrate = 9600
+    
+    ser.write(cmdexit.encode('utf-8'))
+    time.sleep(0.3)
+    ser.write(wr_mem.encode('utf-8'))
+    time.sleep(0.3)
+    
+    ser.close()
+  
+    # Produce a beep to notify user of completion
+    winsound.Beep(freq, dur) 
+        
+    print('---!!!DEVICE DEPLOYMENT COMPLETED!!!---\n')
+    print('Plug in and deploy next device')
+    time.sleep(5)
+    continue
+    
+print('---!!!ALL DEVICES HAVE BEEN DEPLOYED!!!---\n')
+input('---!!!PRESS ANY BUTTON TO EXIT!!!---\n')
+exit(0)
